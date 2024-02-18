@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="sources/logo.png">
+<title>Discord Utilities - Main</title>
+<link rel="stylesheet" href="style.css">
+<style>
+    .console {
+        border: 1px solid #ccc;
+        padding: 10px;
+        height: 200px; /* Adjust as needed */
+        overflow-y: auto;
+        margin-bottom: 10px;
+        font-family: monospace;
+    }
+</style>
+</head>
+<body>
+    <div class="navbar">
+        <a href="index.html">Home</a>
+        <a href="terms_of_service.html">Terms of Service</a>
+        <a href="credits.html">Credits</a>
+    </div>
+
+    <div class="content">
+        <label for="webhook_url" class="label">Webhook URL: <span class="required">(REQUIRED)</span></label>
+        <input type="text" id="webhook_url">
+
+        <label for="message" class="label">Message: <span class="required">(REQUIRED)</span></label>
+        <input type="text" id="message">
+
+        <label for="avatar_url" class="label">Avatar URL:</label>
+        <input type="text" id="avatar_url">
+
+        <label for="bot_username" class="label">Bot Username: <span class="required">(REQUIRED)</span></label>
+        <input type="text" id="bot_username">
+
+        <label for="interval" class="label">Interval (seconds):</label>
+        <input type="number" id="interval">
+
+        <button onclick="sendSingleMessage()">Send Single Message</button>
+        <button onclick="startSending()">Start</button>
+        <button onclick="stopSending()">Stop</button>
+        <button onclick="deleteWebhook()">Delete Webhook</button>
+
+        <div id="status_bar" class="stopped">Stopped</div>
+        
+        <!-- New div for logging -->
+    </div>
+
+    <div class="content">
+        <div class="console" id="console"></div>
+        <button onclick="saveLog()">Save Log</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script>
+        // Function to send a single message
+        function sendSingleMessage() {
+            const webhookUrl = document.getElementById("webhook_url").value;
+            const message = document.getElementById("message").value;
+            const avatarUrl = document.getElementById("avatar_url").value;
+            const botUsername = document.getElementById("bot_username").value;
+
+            sendMessageWithTimestamp(webhookUrl, message, avatarUrl, botUsername);
+        }
+
+        let intervalId = null;
+        let sending = false;
+
+        // Function to start sending messages at regular intervals
+        function startSending() {
+            if (sending) return;
+
+            const interval = parseFloat(document.getElementById("interval").value);
+            if (!interval || interval <= 0) {
+                alert("Invalid interval. Please enter a positive number.");
+                return;
+            }
+
+            sending = true;
+            setStatus("Started");
+            intervalId = setInterval(sendMessagePeriodically, interval * 1000);
+            logMessage("Sending messages started");
+        }
+
+        // Function to stop sending messages
+        function stopSending() {
+            if (!sending) return;
+
+            clearInterval(intervalId);
+            intervalId = null;
+            sending = false;
+            setStatus("Stopped");
+            logMessage("Sending messages stopped");
+        }
+
+        // Function to delete the webhook
+        function deleteWebhook() {
+            const webhookUrl = document.getElementById("webhook_url").value;
+            const confirmation = confirm(`Are you sure you want to delete the webhook ${webhookUrl}?`);
+            if (confirmation) {
+                fetch(webhookUrl, {
+                    method: 'DELETE'
+                })
+                .then(response => {
+                    if (response.ok) {
+                        alert("Webhook deleted successfully.");
+                        document.getElementById("webhook_url").value = "";
+                        logMessage(`Webhook deleted: ${webhookUrl}`);
+                    } else {
+                        throw new Error(`Failed to delete webhook. Status code: ${response.status}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    logMessage(`Error deleting webhook: ${error}`);
+                });
+            }
+        }
+
+        // Function to set the status
+        function setStatus(status) {
+            const statusBar = document.getElementById("status_bar");
+            statusBar.textContent = status;
+            statusBar.className = status.toLowerCase();
+        }
+
+        // Function to log messages with timestamp and webhook URL
+        function logMessage(message) {
+            const currentTime = new Date().toLocaleTimeString();
+            const consoleDiv = document.getElementById("console");
+            const newLog = document.createElement("div");
+            newLog.textContent = `${currentTime} - ${message}`;
+            consoleDiv.appendChild(newLog);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight; // Auto-scroll to bottom
+            if (consoleDiv.children.length > 100) {
+                consoleDiv.removeChild(consoleDiv.children[0]); // Remove first child if there are more than 100 logs
+            }
+        }
+
+        // Function to send a message with timestamp
+        function sendMessageWithTimestamp(webhookUrl, message, avatarUrl, botUsername) {
+            const currentTime = new Date().toLocaleTimeString();
+            sendMessage(webhookUrl, `${message}`, avatarUrl, botUsername);
+        }
+
+        // Function to send a message
+        function sendMessage(webhookUrl, message, avatarUrl, botUsername) {
+            const payload = {
+                content: message,
+                username: botUsername,
+                avatar_url: avatarUrl
+            };
+
+            fetch(webhookUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to send message. Status code: ${response.status}`);
+                }
+                console.log("Message sent successfully");
+                logMessage(`Message sent successfully to ${webhookUrl}: ${message}`);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                logMessage(`Error sending message to ${webhookUrl}: ${error}`);
+            });
+        }
+
+        // Function to send messages periodically
+        function sendMessagePeriodically() {
+            const webhookUrl = document.getElementById("webhook_url").value;
+            const message = document.getElementById("message").value;
+            const avatarUrl = document.getElementById("avatar_url").value;
+            const botUsername = document.getElementById("bot_username").value;
+            sendMessageWithTimestamp(webhookUrl, message, avatarUrl, botUsername);
+        }
+
+        // Function to save log
+        function saveLog() {
+            const consoleContent = document.getElementById("console").innerText;
+            const blob = new Blob([consoleContent], { type: "text/plain;charset=utf-8" });
+            saveAs(blob, "log.txt");
+        }
+
+        // Function to clear log
+        function clearLog() {
+            const consoleDiv = document.getElementById("console");
+            consoleDiv.innerHTML = "";
+        }
+    </script>
+
+    <script src="FileSaver.js"></script>
+</body>
+</html>
